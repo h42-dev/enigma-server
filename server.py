@@ -90,7 +90,7 @@ async def ws_handler(websocket: ServerConnection):
                     "event": "joined", "peerId": peer_id, "name": peer_name,
                 }, exclude=websocket)
 
-            elif mtype in ("char", "delete", "clear", "typing") and room_code:
+            elif mtype in ("message", "typing") and room_code:
                 await broadcast(room_code, {
                     **msg, "peerId": peer_id, "name": peer_name
                 }, exclude=websocket)
