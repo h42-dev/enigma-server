@@ -98,6 +98,10 @@ async def ws_handler(websocket: ServerConnection):
 
 def serve_static(connection: ServerConnection, request: Request):
     """Return a Response for static files; return None to let WS handshake proceed."""
+    # No public/ folder (e.g. deployed as backend-only on Render) — pass everything through
+    if not PUBLIC.exists():
+        return None
+
     # WebSocket upgrade requests: let websockets handle them
     if request.headers.get("Upgrade", "").lower() == "websocket":
         return None
