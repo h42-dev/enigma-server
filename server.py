@@ -17,7 +17,8 @@ from websockets.exceptions import ConnectionClosed
 
 PUBLIC = Path(__file__).parent / "public"
 
-rooms: dict[str, dict[str, ServerConnection]] = {}
+# rooms: { room_code: { peer_id: { ws, name } } }
+rooms: dict[str, dict[str, dict]] = {}
 peer_counter = 0
 
 
@@ -28,11 +29,11 @@ async def broadcast(room_code: str, msg: dict, exclude=None):
         return
     data = json.dumps(msg)
     dead = []
-    for pid, ws in list(rooms[room_code].items()):
-        if ws is exclude:
+    for pid, peer in list(rooms[room_code].items()):
+        if peer["ws"] is exclude:
             continue
         try:
-            await ws.send(data)
+            await peer["ws"].send(data)
         except Exception:
             dead.append(pid)
     for pid in dead:
@@ -46,6 +47,7 @@ async def ws_handler(websocket: ServerConnection):
     peer_counter += 1
     peer_id = f"P{peer_counter:03d}"
     room_code = None
+    peer_name = "UNKNOWN"
 
     try:
         async for raw in websocket:
@@ -62,22 +64,36 @@ async def ws_handler(websocket: ServerConnection):
                 )[:8]
                 if not code:
                     continue
+                raw_name = str(msg.get("name", "")).strip().upper()
+                peer_name = raw_name[:12] if raw_name else f"OP{peer_id}"
+
                 room_code = code
-                rooms.setdefault(room_code, {})[peer_id] = websocket
+                rooms.setdefault(room_code, {})[peer_id] = {
+                    "ws": websocket, "name": peer_name
+                }
                 count = len(rooms[room_code])
+
+                # Send back existing operators so new joiner knows who's there
+                existing = [
+                    {"peerId": pid, "name": p["name"]}
+                    for pid, p in rooms[room_code].items()
+                    if pid != peer_id
+                ]
 
                 await websocket.send(json.dumps({
                     "type": "joined", "room": room_code,
-                    "peerId": peer_id, "peers": count,
+                    "peerId": peer_id, "name": peer_name,
+                    "peers": count, "existing": existing,
                 }))
                 await broadcast(room_code, {
                     "type": "peer_update", "peers": count,
-                    "event": "joined", "peerId": peer_id,
+                    "event": "joined", "peerId": peer_id, "name": peer_name,
                 }, exclude=websocket)
 
             elif mtype in ("char", "delete", "clear", "typing") and room_code:
-                await broadcast(room_code, {**msg, "peerId": peer_id},
-                                exclude=websocket)
+                await broadcast(room_code, {
+                    **msg, "peerId": peer_id, "name": peer_name
+                }, exclude=websocket)
 
     except ConnectionClosed:
         pass
@@ -90,7 +106,7 @@ async def ws_handler(websocket: ServerConnection):
             else:
                 await broadcast(room_code, {
                     "type": "peer_update", "peers": size,
-                    "event": "left", "peerId": peer_id,
+                    "event": "left", "peerId": peer_id, "name": peer_name,
                 })
 
 
@@ -98,11 +114,8 @@ async def ws_handler(websocket: ServerConnection):
 
 def serve_static(connection: ServerConnection, request: Request):
     """Return a Response for static files; return None to let WS handshake proceed."""
-    # No public/ folder (e.g. deployed as backend-only on Render) — pass everything through
     if not PUBLIC.exists():
         return None
-
-    # WebSocket upgrade requests: let websockets handle them
     if request.headers.get("Upgrade", "").lower() == "websocket":
         return None
 
@@ -112,7 +125,6 @@ def serve_static(connection: ServerConnection, request: Request):
 
     file_path = PUBLIC / path.lstrip("/")
 
-    # Security: stay inside public/
     try:
         file_path.resolve().relative_to(PUBLIC.resolve())
     except ValueError:
@@ -140,8 +152,6 @@ async def main():
     print(f"  Running at \033[92mhttp://localhost:{port}\033[0m")
     print(f"  Open on multiple devices (or tabs) to begin transmission\n")
 
-    # origins=None allows cross-origin connections (required when frontend
-    # is on a different host, e.g. Netlify, and backend is here on Render)
     async with serve(ws_handler, "0.0.0.0", port,
                      process_request=serve_static,
                      origins=None):
