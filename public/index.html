@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ENIGMA CIPHER</title>
+<script src="/qrcode.min.js"></script>
+<style>
+:root {
+  --g:    #39ff14;
+  --g2:   #1e8a0a;
+  --g3:   #0c3a06;
+  --bg:   #030603;
+  --panel:#050d04;
+  --bdr:  #163010;
+  --amb:  #ffb000;
+  --red:  #ff3a3a;
+  --wht:  #c8ffc0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--g); font-family: 'Courier New', Courier, monospace; font-size: 13px; overflow: hidden; }
+body { text-shadow: 0 0 5px rgba(57,255,20,0.35); }
+body::after { content: ''; position: fixed; inset: 0; background: repeating-linear-gradient(0deg,transparent 0,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px); pointer-events: none; z-index: 9999; }
+
+/* ── App shell ── */
+#app { display: flex; flex-direction: column; height: 100vh; max-width: 900px; margin: 0 auto; border-left: 1px solid var(--bdr); border-right: 1px solid var(--bdr); }
+
+/* ── Header ── */
+#header { padding: 7px 14px; display: flex; align-items: center; justify-content: space-between; background: var(--panel); border-bottom: 1px solid var(--bdr); flex-shrink: 0; }
+#title { font-size: 14px; font-weight: bold; letter-spacing: 6px; }
+#title span { color: var(--amb); text-shadow: 0 0 8px rgba(255,176,0,0.6); }
+#status { font-size: 10px; letter-spacing: 2px; color: var(--g2); }
+#status.connected { color: var(--g); }
+#status.error { color: var(--red); }
+
+/* ── Join panel ── */
+#join-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 32px; overflow-y: auto; }
+.ascii-art { text-align: center; font-size: 11px; line-height: 1.3; color: var(--g2); letter-spacing: 1px; }
+.join-box { display: flex; flex-direction: column; align-items: center; gap: 10px; border: 1px solid var(--bdr); padding: 24px 32px; background: var(--panel); width: 100%; max-width: 400px; }
+.join-label { font-size: 9px; letter-spacing: 3px; color: var(--g2); align-self: flex-start; }
+.join-field { width: 100%; background: var(--bg); border: 1px solid var(--g2); color: var(--g); font-family: inherit; font-size: 16px; letter-spacing: 4px; text-align: center; padding: 9px; text-transform: uppercase; outline: none; }
+.join-field:focus { border-color: var(--g); box-shadow: 0 0 8px rgba(57,255,20,0.2); }
+.join-field::placeholder { color: var(--g3); font-size: 12px; letter-spacing: 2px; }
+.join-row { display: flex; gap: 8px; width: 100%; }
+.btn { background: transparent; border: 1px solid var(--g2); color: var(--g2); font-family: inherit; font-size: 10px; letter-spacing: 2px; padding: 8px 12px; cursor: pointer; transition: all 0.12s; white-space: nowrap; }
+.btn:hover { border-color: var(--g); color: var(--g); }
+.btn.primary { border-color: var(--g); color: var(--g); }
+.btn.primary:hover { background: var(--g3); }
+.btn.active { background: var(--g3); border-color: var(--g); color: var(--g); }
+.join-hint { font-size: 10px; color: var(--g3); letter-spacing: 1px; text-align: center; line-height: 1.6; }
+details summary { font-size: 9px; letter-spacing: 2px; color: var(--g2); cursor: pointer; list-style: none; padding: 3px 0; }
+details summary:hover { color: var(--g); }
+.adv-input { width: 100%; background: var(--bg); border: 1px solid var(--g2); color: var(--g); font-family: inherit; font-size: 11px; padding: 6px; outline: none; letter-spacing: 1px; margin-top: 6px; }
+.adv-hint { font-size: 9px; color: var(--g3); margin-top: 4px; line-height: 1.5; }
+
+/* ── Main panel ── */
+#main-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+
+/* ── Machine bar ── */
+#machine-bar { display: flex; align-items: stretch; background: var(--panel); border-bottom: 1px solid var(--bdr); flex-shrink: 0; }
+.rotor-cell { padding: 5px 12px; border-right: 1px solid var(--bdr); display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.r-label { font-size: 8px; letter-spacing: 1px; color: var(--g3); }
+.r-pos { font-size: 18px; font-weight: bold; }
+.r-name { font-size: 9px; color: var(--g2); }
+#plug-cell { flex: 1; padding: 5px 10px; display: flex; flex-direction: column; justify-content: center; }
+#plug-lbl { font-size: 8px; letter-spacing: 1px; color: var(--g3); }
+#plug-val { font-size: 9px; color: var(--g2); letter-spacing: 1px; word-spacing: 3px; margin-top: 1px; }
+
+/* ── Lamp board ── */
+#lamp-board { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px; border-bottom: 1px solid var(--bdr); background: var(--bg); flex-shrink: 0; }
+.lamp-row { display: flex; gap: 4px; }
+.lamp { width: 25px; height: 21px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border: 1px solid var(--g3); color: var(--g3); border-radius: 3px; transition: all 0.05s; }
+.lamp.lit { color: #000; background: var(--g); border-color: var(--g); box-shadow: 0 0 12px rgba(57,255,20,0.9); text-shadow: none; }
+
+/* ── Chat history ── */
+#chat-history { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+#chat-history:empty::before { content: 'AWAITING TRANSMISSION...'; font-size: 10px; letter-spacing: 3px; color: var(--g3); text-align: center; margin-top: 20px; }
+
+/* ── Message bubbles ── */
+.msg { display: flex; flex-direction: column; gap: 4px; }
+.msg-header { display: flex; align-items: baseline; gap: 8px; }
+.msg-name { font-size: 10px; font-weight: bold; letter-spacing: 3px; }
+.msg-name.own { color: var(--g); }
+.msg-name.other { color: var(--amb); text-shadow: 0 0 6px rgba(255,176,0,0.4); }
+.msg-time { font-size: 9px; color: var(--g3); letter-spacing: 1px; }
+.msg-you-badge { font-size: 8px; color: var(--g2); letter-spacing: 2px; border: 1px solid var(--g3); padding: 0 4px; }
+.msg-body { border-left: 2px solid; padding: 5px 10px; display: flex; flex-direction: column; gap: 3px; }
+.msg-body.own { border-color: var(--g2); background: rgba(57,255,20,0.03); }
+.msg-body.other { border-color: rgba(255,176,0,0.3); background: rgba(255,176,0,0.03); }
+.msg-row { display: flex; align-items: flex-start; gap: 8px; }
+.msg-row-lbl { font-size: 8px; color: var(--g3); letter-spacing: 2px; width: 52px; flex-shrink: 0; padding-top: 2px; }
+.msg-text { font-size: 13px; letter-spacing: 2px; word-break: break-all; line-height: 1.5; }
+.msg-enc { color: var(--g); }
+.msg-plain { color: var(--wht); }
+.decode-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.decode-btn { background: transparent; border: 1px solid rgba(255,176,0,0.4); color: var(--amb); font-family: inherit; font-size: 9px; letter-spacing: 2px; padding: 3px 8px; cursor: pointer; transition: all 0.12s; }
+.decode-btn:hover { background: rgba(255,176,0,0.1); border-color: var(--amb); }
+.decode-btn:disabled { opacity: 0.3; cursor: default; }
+.decoded-reveal { font-size: 13px; letter-spacing: 2px; color: var(--wht); word-break: break-all; display: none; }
+.decoded-reveal.shown { display: block; }
+
+/* ── Compose area ── */
+#compose-area { border-top: 1px solid var(--bdr); background: var(--panel); flex-shrink: 0; }
+#compose-header { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid var(--bdr); }
+#compose-dir { font-size: 10px; font-weight: bold; letter-spacing: 3px; color: var(--g); }
+#compose-hint { font-size: 9px; color: var(--g2); letter-spacing: 1px; }
+#typing-indicator { font-size: 9px; color: var(--amb); letter-spacing: 2px; margin-left: auto; opacity: 0; transition: opacity 0.25s; }
+#typing-indicator.visible { opacity: 1; animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+.compose-row { display: flex; align-items: flex-start; padding: 5px 12px; border-bottom: 1px solid var(--g3); min-height: 30px; }
+.compose-row:last-of-type { border-bottom: none; }
+.compose-lbl { font-size: 8px; color: var(--g3); letter-spacing: 2px; width: 56px; flex-shrink: 0; padding-top: 3px; }
+.compose-text { flex: 1; font-size: 14px; letter-spacing: 3px; word-break: break-all; line-height: 1.5; min-height: 20px; }
+#compose-plain { color: var(--wht); }
+#compose-encoded { color: var(--g); }
+.cursor { display: inline-block; width: 8px; height: 14px; background: var(--g); vertical-align: middle; animation: blink 1s step-end infinite; margin-left: 1px; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ── Bottom bar ── */
+#bottom-bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-top: 1px solid var(--bdr); background: var(--panel); flex-shrink: 0; flex-wrap: wrap; }
+.hint { font-size: 9px; color: var(--g3); opacity: 0.7; white-space: nowrap; }
+.hkey { display: inline-block; border: 1px solid var(--g3); padding: 0 3px; font-size: 8px; margin-right: 2px; }
+#peer-count { margin-left: auto; font-size: 10px; color: var(--g2); white-space: nowrap; }
+
+/* ── Rotor spin ── */
+@keyframes spin-in { from{transform:translateY(-60%);opacity:0} to{transform:translateY(0);opacity:1} }
+.r-pos.spinning { animation: spin-in 0.09s ease-out; }
+
+/* ── QR modal ── */
+#qr-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 1000; align-items: center; justify-content: center; }
+#qr-overlay.open { display: flex; }
+#qr-box { background: var(--panel); border: 1px solid var(--g); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 300px; width: 90%; }
+#qr-title { font-size: 10px; letter-spacing: 4px; color: var(--g); }
+#qr-wrap { background: #fff; padding: 10px; }
+#qr-url { font-size: 9px; color: var(--g2); letter-spacing: 1px; text-align: center; word-break: break-all; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--g3); }
+
+@media (max-width: 600px) {
+  .lamp { width: 21px; height: 19px; font-size: 10px; }
+  .r-pos { font-size: 15px; }
+  #plug-val { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="header">
+  <div id="title">ENIGMA <span>CIPHER</span></div>
+  <div id="status">○ OFFLINE</div>
+</div>
+
+<!-- ══ JOIN PANEL ══════════════════════════════ -->
+<div id="join-panel">
+  <div class="ascii-art">
+╔══════════════════════════════════════════════╗
+║  Wehrmacht ENIGMA — REAL-TIME CIPHER SYSTEM  ║
+║  ALL TRANSMISSIONS ENCODED VIA ROTOR CIPHER  ║
+╚══════════════════════════════════════════════╝</div>
+
+  <div class="join-box">
+    <div class="join-label">OPERATOR NAME</div>
+    <input class="join-field" id="name-input" maxlength="12" placeholder="YOUR NAME" autocomplete="off" spellcheck="false">
+
+    <div class="join-label" style="margin-top:6px">ROOM CODE</div>
+    <div class="join-row">
+      <input class="join-field" id="room-input" maxlength="8" placeholder="XXXXXX" autocomplete="off" spellcheck="false" style="letter-spacing:6px">
+    </div>
+
+    <div class="join-row" style="margin-top:4px">
+      <button class="btn" id="gen-btn">GENERATE</button>
+      <button class="btn primary" id="join-btn">CONNECT</button>
+    </div>
+
+    <div class="join-hint">Same room code = same Enigma machine.<br>Share via QR after connecting.</div>
+
+    <details style="width:100%">
+      <summary>▸ ADVANCED — BACKEND URL</summary>
+      <input class="adv-input" id="server-url-input" type="text" placeholder="wss://your-server.onrender.com">
+      <div class="adv-hint">Leave blank when running locally.<br>Required when frontend is on Netlify.</div>
+    </details>
+  </div>
+
+  <div class="ascii-art" style="color:var(--g3)">ROTOR I–V · REFLECTOR B/C · 8-PAIR PLUGBOARD</div>
+</div>
+
+<!-- ══ MAIN PANEL ══════════════════════════════ -->
+<div id="main-panel">
+
+  <!-- Machine bar -->
+  <div id="machine-bar">
+    <div class="rotor-cell">
+      <div class="r-label">LEFT</div>
+      <div class="r-pos" id="r0">A</div>
+      <div class="r-name" id="rn0">I</div>
+    </div>
+    <div class="rotor-cell">
+      <div class="r-label">MID</div>
+      <div class="r-pos" id="r1">A</div>
+      <div class="r-name" id="rn1">II</div>
+    </div>
+    <div class="rotor-cell">
+      <div class="r-label">RIGHT</div>
+      <div class="r-pos" id="r2">A</div>
+      <div class="r-name" id="rn2">III</div>
+    </div>
+    <div class="rotor-cell" style="border-right:1px solid var(--bdr)">
+      <div class="r-label">REFL</div>
+      <div class="r-pos" id="r-ref" style="font-size:14px">B</div>
+    </div>
+    <div id="plug-cell">
+      <div id="plug-lbl">PLUGBOARD</div>
+      <div id="plug-val">—</div>
+    </div>
+  </div>
+
+  <!-- Lamp board (QWERTZ layout) -->
+  <div id="lamp-board">
+    <div class="lamp-row" id="lr1"></div>
+    <div class="lamp-row" id="lr2"></div>
+    <div class="lamp-row" id="lr3"></div>
+  </div>
+
+  <!-- Chat history -->
+  <div id="chat-history"></div>
+
+  <!-- Compose -->
+  <div id="compose-area">
+    <div id="compose-header">
+      <div id="compose-dir">▶ COMPOSING</div>
+      <div id="compose-hint">— TYPE LETTERS · ENTER TO SEND · ⌫ DELETE</div>
+      <div id="typing-indicator">◌ TRANSMITTING</div>
+    </div>
+    <div class="compose-row">
+      <div class="compose-lbl">PLAIN</div>
+      <div class="compose-text" id="compose-plain"><span class="cursor"></span></div>
+    </div>
+    <div class="compose-row">
+      <div class="compose-lbl">ENCODED</div>
+      <div class="compose-text" id="compose-encoded"></div>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div id="bottom-bar">
+    <span class="hint"><span class="hkey">A–Z</span>type</span>
+    <span class="hint"><span class="hkey">↵</span>send</span>
+    <span class="hint"><span class="hkey">⌫</span>delete</span>
+    <span class="hint"><span class="hkey">Esc</span>clear</span>
+    <button class="btn" id="sound-btn">SOUND: ON</button>
+    <button class="btn" id="qr-btn">SHARE QR</button>
+    <div id="peer-count">PEERS: 1</div>
+  </div>
+</div>
+</div>
+
+<!-- QR modal -->
+<div id="qr-overlay">
+  <div id="qr-box">
+    <div id="qr-title">SHARE ROOM</div>
+    <div id="qr-wrap"><div id="qr-canvas"></div></div>
+    <div id="qr-url"></div>
+    <button class="btn primary" id="qr-close" style="align-self:stretch">CLOSE</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════
+//  ENIGMA MACHINE
+// ══════════════════════════════════════════════════
+
+const WIRING  = ['EKMFLGDQVZNTOWYHXUSPAIBRCJ','AJDKSIRUXBLHWTMCQGZNPYFVOE','BDFHJLCPRTXVZNYEIWGAKMUSQO','ESOVPZJAYQUIRHXLNFTGKDCMWB','VZBRGITYUPSDNHLXAWMJQOFECK'];
+const NOTCHES = [16,4,21,9,25];
+const RNAMES  = ['I','II','III','IV','V'];
+const REFL    = { B:'YRUHQSLDPXNGOKMIEBFZCWVJAT', C:'FVPJIAOYEDRZXWGCTKUQSBNMHL' };
+
+class Enigma {
+  constructor({rotors,start,rings,plug,reflector}) {
+    this.rotors=rotors; this.pos=[...start]; this.rings=rings||[0,0,0];
+    this.plug=plug||{}; this.ref=reflector||'B';
+  }
+  _p(c){ return this.plug[c]??c; }
+  _step(){
+    const at=i=>this.pos[i]===NOTCHES[this.rotors[i]];
+    if(at(1)){this.pos[0]=(this.pos[0]+1)%26;this.pos[1]=(this.pos[1]+1)%26;}
+    else if(at(2)){this.pos[1]=(this.pos[1]+1)%26;}
+    this.pos[2]=(this.pos[2]+1)%26;
+  }
+  _t(c,ri,inv){
+    const w=WIRING[this.rotors[ri]], off=(this.pos[ri]-this.rings[ri]+26)%26;
+    c=(c+off)%26;
+    c=inv?w.indexOf(String.fromCharCode(c+65)):w.charCodeAt(c)-65;
+    return (c-off+26)%26;
+  }
+  _enc(ch){
+    let c=this._p(ch).charCodeAt(0)-65;
+    c=this._t(c,2,0);c=this._t(c,1,0);c=this._t(c,0,0);
+    c=REFL[this.ref].charCodeAt(c)-65;
+    c=this._t(c,0,1);c=this._t(c,1,1);c=this._t(c,2,1);
+    return this._p(String.fromCharCode(c+65));
+  }
+  encode(ch){
+    if(!/[A-Z]/.test(ch)) return {out:ch,pos:null};
+    this._step(); return {out:this._enc(ch),pos:[...this.pos]};
+  }
+  encodeAt(ch,pos){
+    if(!/[A-Z]/.test(ch)) return ch;
+    const s=[...this.pos]; this.pos=[...pos];
+    const r=this._enc(ch); this.pos=s; return r;
+  }
+  get posLetters(){ return this.pos.map(p=>String.fromCharCode(p+65)); }
+  get rotorNames(){ return this.rotors.map(i=>RNAMES[i]); }
+}
+
+function deriveSettings(code){
+  let h=5381;
+  for(const c of code.toUpperCase()) h=(Math.imul(h,33)^c.charCodeAt(0))>>>0;
+  const lcg=()=>{h=(Math.imul(h,1664525)+1013904223)>>>0;return h;};
+  const pool=[0,1,2,3,4],rotors=[];
+  for(let i=0;i<3;i++) rotors.push(pool.splice(lcg()%pool.length,1)[0]);
+  const start=[lcg()%26,lcg()%26,lcg()%26];
+  const plug={},alpha=[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+  for(let i=0;i<8&&alpha.length>=2;i++){
+    const a=alpha.splice(lcg()%alpha.length,1)[0];
+    const b=alpha.splice(lcg()%alpha.length,1)[0];
+    plug[a]=b;plug[b]=a;
+  }
+  return {rotors,start,rings:[0,0,0],plug,reflector:lcg()%2?'B':'C'};
+}
+
+// ══════════════════════════════════════════════════
+//  SOUND
+// ══════════════════════════════════════════════════
+
+let audioCtx=null, soundEnabled=true;
+const audio=()=>audioCtx||(audioCtx=new(window.AudioContext||window.webkitAudioContext)());
+
+function noise(dur,freq,type,vol){
+  const ctx=audio(),t=ctx.currentTime;
+  const len=Math.floor(ctx.sampleRate*dur);
+  const buf=ctx.createBuffer(1,len,ctx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const src=ctx.createBufferSource(); src.buffer=buf;
+  const flt=ctx.createBiquadFilter(); flt.type=type; flt.frequency.value=freq;
+  const g=ctx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(flt);flt.connect(g);g.connect(ctx.destination);src.start(t);
+}
+function playKey(){ if(soundEnabled) noise(0.042,350,'highpass',0.45); }
+function playRecv(){ if(soundEnabled) noise(0.06,900,'bandpass',0.18); }
+function playConnect(){
+  if(!soundEnabled) return;
+  const ctx=audio();
+  [440,554,659].forEach((f,i)=>{
+    const t=ctx.currentTime+i*0.12;
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.frequency.value=f; o.type='sine';
+    g.gain.setValueAtTime(0.12,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+    o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+0.18);
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+
+let ws=null, myId=null, myName='', settings=null, currentRoom=null;
+let sendMachine=null, decodeMachine=null;
+let composing=[];       // [{raw,enc,pos}] — current typed but unsent message
+let inputEnabled=false;
+let typingTimer=null, typingActive=false, peerTypingTimer=null;
+
+// ══════════════════════════════════════════════════
+//  WEBSOCKET
+// ══════════════════════════════════════════════════
+
+function getWsUrl(){
+  const p=new URLSearchParams(location.search).get('server')||'';
+  const s=localStorage.getItem('enigma_server')||'';
+  const c=(p||s).trim();
+  if(c) return c.startsWith('ws')?c:`wss://${c}`;
+  if(location.protocol==='https:') return 'wss://enigma-server-mhax.onrender.com';
+  return `ws://${location.host}`;
+}
+
+function connectWS(room){
+  ws=new WebSocket(getWsUrl());
+  setStatus('connecting');
+  ws.onopen=()=>ws.send(JSON.stringify({type:'join',room,name:myName}));
+  ws.onmessage=e=>{ let m; try{m=JSON.parse(e.data);}catch{return;} handle(m); };
+  ws.onclose=()=>{ setStatus('disconnected'); ws=null; inputEnabled=false; stopTyping();
+    document.getElementById('join-panel').style.display='';
+    document.getElementById('main-panel').style.display='none'; };
+  ws.onerror=()=>setStatus('error');
+}
+
+function handle(msg){
+  switch(msg.type){
+    case 'joined':
+      myId=msg.peerId; myName=msg.name; currentRoom=msg.room;
+      settings=deriveSettings(msg.room);
+      sendMachine=new Enigma(settings);
+      decodeMachine=new Enigma(settings);
+      setStatus('connected',msg.peers);
+      activate(msg.room);
+      playConnect();
+      break;
+    case 'peer_update':
+      setStatus('connected',msg.peers);
+      document.getElementById('peer-count').textContent=`PEERS: ${msg.peers}`;
+      addSystemMsg(msg.event==='joined'?`${msg.name} JOINED`:`${msg.name} LEFT`);
+      break;
+    case 'message':
+      addInboundMsg(msg);
+      clearTimeout(peerTypingTimer);
+      showPeerTyping(false,'');
+      playRecv();
+      break;
+    case 'typing':
+      showPeerTyping(msg.active,msg.name);
+      if(msg.active){ clearTimeout(peerTypingTimer); peerTypingTimer=setTimeout(()=>showPeerTyping(false,''),3000); }
+      break;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  KEYBOARD
+// ══════════════════════════════════════════════════
+
+document.addEventListener('keydown',e=>{
+  if(e.target.id==='room-input'||e.target.id==='name-input'||e.target.id==='server-url-input') return;
+  if(!inputEnabled||!ws||ws.readyState!==WebSocket.OPEN) return;
+  const k=e.key;
+
+  if(k==='Enter'){ e.preventDefault(); sendMessage(); return; }
+  if(k==='Escape'){ e.preventDefault(); clearCompose(); return; }
+
+  if(k.length===1&&/[a-zA-Z]/.test(k)){
+    e.preventDefault();
+    const {out:enc,pos}=sendMachine.encode(k.toUpperCase());
+    composing.push({raw:k.toUpperCase(),enc,pos});
+    playKey(); flashLamp(enc); spinRotors(); renderCompose(); signalTyping();
+    return;
+  }
+  if(k===' '){ e.preventDefault(); composing.push({raw:' ',enc:' ',pos:null}); renderCompose(); signalTyping(); return; }
+  if(k==='Backspace'){ e.preventDefault(); if(composing.length){composing.pop();renderCompose();} return; }
+});
+
+function sendMessage(){
+  if(!composing.length) return;
+  const plain   = composing.map(c=>c.raw).join('');
+  const encoded = composing.map(c=>c.enc).join('');
+  const positions = composing.filter(c=>c.pos).map(c=>({ch:c.enc,pos:c.pos}));
+
+  ws.send(JSON.stringify({type:'message',encoded,positions,name:myName,ts:Date.now()}));
+  addOwnMsg(plain,encoded);
+  composing=[];
+  renderCompose();
+  stopTyping();
+}
+
+function clearCompose(){ composing=[]; renderCompose(); }
+
+// ══════════════════════════════════════════════════
+//  TYPING INDICATOR
+// ══════════════════════════════════════════════════
+
+function signalTyping(){
+  if(!typingActive&&ws?.readyState===WebSocket.OPEN){ ws.send(JSON.stringify({type:'typing',active:true})); typingActive=true; }
+  clearTimeout(typingTimer);
+  typingTimer=setTimeout(stopTyping,2000);
+}
+function stopTyping(){
+  clearTimeout(typingTimer); typingTimer=null;
+  if(typingActive&&ws?.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'typing',active:false}));
+  typingActive=false;
+}
+function showPeerTyping(active,name){
+  const el=document.getElementById('typing-indicator');
+  if(active&&name) el.textContent=`◌ ${name} TRANSMITTING`;
+  el.classList.toggle('visible',active);
+}
+
+// ══════════════════════════════════════════════════
+//  CHAT RENDERING
+// ══════════════════════════════════════════════════
+
+function ts(epoch){
+  const d=new Date(epoch);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function addOwnMsg(plain,encoded){
+  const h=document.getElementById('chat-history');
+  const div=document.createElement('div');
+  div.className='msg';
+  div.innerHTML=`
+    <div class="msg-header">
+      <span class="msg-name own">${esc(myName)}</span>
+      <span class="msg-time">${ts(Date.now())}</span>
+      <span class="msg-you-badge">YOU</span>
+    </div>
+    <div class="msg-body own">
+      <div class="msg-row"><div class="msg-row-lbl">PLAIN</div><div class="msg-text msg-plain">${esc(plain)}</div></div>
+      <div class="msg-row"><div class="msg-row-lbl">ENCODED</div><div class="msg-text msg-enc">${esc(encoded)}</div></div>
+    </div>`;
+  h.appendChild(div);
+  h.scrollTop=99999;
+}
+
+function addInboundMsg({encoded,positions,name,ts:msgTs}){
+  const h=document.getElementById('chat-history');
+  const id='msg-'+Math.random().toString(36).slice(2);
+  const div=document.createElement('div');
+  div.className='msg';
+  div.innerHTML=`
+    <div class="msg-header">
+      <span class="msg-name other">${esc(name||'UNKNOWN')}</span>
+      <span class="msg-time">${ts(msgTs||Date.now())}</span>
+    </div>
+    <div class="msg-body other">
+      <div class="msg-row"><div class="msg-row-lbl">ENCODED</div><div class="msg-text msg-enc">${esc(encoded)}</div></div>
+      <div class="decode-row">
+        <button class="decode-btn" data-id="${id}">▶ DECODE</button>
+        <span class="decoded-reveal" id="${id}"></span>
+      </div>
+    </div>`;
+
+  // Attach decode logic
+  div.querySelector('.decode-btn').addEventListener('click',function(){
+    const span=document.getElementById(id);
+    if(span.classList.contains('shown')){ span.classList.remove('shown'); this.textContent='▶ DECODE'; return; }
+    if(!span.textContent){
+      // Decode on demand using stored positions
+      const posMap={};
+      if(positions) positions.forEach(({ch,pos})=>{
+        if(!posMap[ch]) posMap[ch]=[];
+        posMap[ch].push(pos);
+      });
+      // We need per-character positions in order
+      let decoded='';
+      let letterIdx=0;
+      const letterPositions=positions||[];
+      for(let i=0;i<encoded.length;i++){
+        const ch=encoded[i];
+        if(/[A-Z]/.test(ch)&&letterPositions[letterIdx]){
+          decoded+=decodeMachine.encodeAt(ch,letterPositions[letterIdx].pos);
+          letterIdx++;
+        } else {
+          decoded+=ch;
+        }
+      }
+      span.textContent=decoded;
+    }
+    span.classList.add('shown');
+    this.textContent='▼ HIDE';
+  });
+
+  h.appendChild(div);
+  h.scrollTop=99999;
+}
+
+function addSystemMsg(text){
+  const h=document.getElementById('chat-history');
+  const div=document.createElement('div');
+  div.style.cssText='text-align:center;font-size:9px;color:var(--g3);letter-spacing:2px;padding:4px 0';
+  div.textContent=`— ${text} —`;
+  h.appendChild(div);
+  h.scrollTop=99999;
+}
+
+// ══════════════════════════════════════════════════
+//  COMPOSE RENDERING
+// ══════════════════════════════════════════════════
+
+function renderCompose(){
+  const plain=document.getElementById('compose-plain');
+  const enc=document.getElementById('compose-encoded');
+  plain.innerHTML=esc(composing.map(c=>c.raw).join(''))+'<span class="cursor"></span>';
+  enc.textContent=composing.map(c=>c.enc).join('');
+}
+
+// ══════════════════════════════════════════════════
+//  ROTORS + LAMP
+// ══════════════════════════════════════════════════
+
+function renderRotors(){
+  if(!sendMachine) return;
+  const l=sendMachine.posLetters, n=sendMachine.rotorNames;
+  for(let i=0;i<3;i++){ document.getElementById(`r${i}`).textContent=l[i]; document.getElementById(`rn${i}`).textContent=n[i]; }
+}
+let spinTO=null;
+function spinRotors(){
+  renderRotors();
+  document.querySelectorAll('.r-pos').forEach(el=>{el.classList.remove('spinning');void el.offsetWidth;el.classList.add('spinning');});
+  clearTimeout(spinTO); spinTO=setTimeout(()=>document.querySelectorAll('.r-pos').forEach(el=>el.classList.remove('spinning')),100);
+}
+let lampTO=null;
+function flashLamp(l){
+  document.querySelectorAll('.lamp.lit').forEach(el=>el.classList.remove('lit'));
+  clearTimeout(lampTO);
+  const el=document.querySelector(`.lamp[data-l="${l}"]`);
+  if(el){el.classList.add('lit');lampTO=setTimeout(()=>el.classList.remove('lit'),180);}
+}
+
+// ══════════════════════════════════════════════════
+//  ACTIVATE
+// ══════════════════════════════════════════════════
+
+function activate(room){
+  document.getElementById('join-panel').style.display='none';
+  document.getElementById('main-panel').style.display='flex';
+  inputEnabled=true; composing=[];
+  document.getElementById('chat-history').innerHTML='';
+  renderCompose(); renderRotors();
+  document.getElementById('peer-count').textContent='PEERS: 1';
+  document.getElementById('compose-dir').textContent=`▶ ${myName}`;
+  document.getElementById('r-ref').textContent=settings.reflector;
+  const pairs=[],seen=new Set();
+  for(const [a,b] of Object.entries(settings.plug)){
+    if(!seen.has(a)){pairs.push(`${a}↔${b}`);seen.add(a);seen.add(b);}
+  }
+  document.getElementById('plug-val').textContent=pairs.join('  ')||'(none)';
+}
+
+function setStatus(s,peers){
+  const el=document.getElementById('status');
+  if(s==='connected'){el.textContent=`● CONNECTED — ${peers} DEVICE${peers!==1?'S':''}`;el.className='connected';}
+  else if(s==='connecting'){el.textContent='◌ CONNECTING…';el.className='';}
+  else if(s==='disconnected'){el.textContent='○ OFFLINE';el.className='';}
+  else if(s==='error'){el.textContent='✕ ERROR';el.className='error';}
+}
+
+// ══════════════════════════════════════════════════
+//  QR CODE
+// ══════════════════════════════════════════════════
+
+document.getElementById('qr-btn').addEventListener('click',()=>{
+  if(!currentRoom) return;
+  const srv=localStorage.getItem('enigma_server')||'';
+  const sp=srv?`&server=${encodeURIComponent(srv)}`:'';
+  const url=`${location.origin}${location.pathname}?room=${currentRoom}${sp}`;
+  document.getElementById('qr-url').textContent=url;
+  document.getElementById('qr-canvas').innerHTML='';
+  new QRCode(document.getElementById('qr-canvas'),{text:url,width:190,height:190,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});
+  document.getElementById('qr-overlay').classList.add('open');
+});
+document.getElementById('qr-close').addEventListener('click',()=>document.getElementById('qr-overlay').classList.remove('open'));
+document.getElementById('qr-overlay').addEventListener('click',e=>{if(e.target===document.getElementById('qr-overlay'))document.getElementById('qr-overlay').classList.remove('open');});
+
+// ══════════════════════════════════════════════════
+//  SOUND TOGGLE
+// ══════════════════════════════════════════════════
+
+document.getElementById('sound-btn').addEventListener('click',()=>{
+  soundEnabled=!soundEnabled;
+  document.getElementById('sound-btn').textContent=`SOUND: ${soundEnabled?'ON':'OFF'}`;
+  document.getElementById('sound-btn').classList.toggle('active',soundEnabled);
+  if(soundEnabled&&audioCtx?.state==='suspended') audioCtx.resume();
+});
+
+// ══════════════════════════════════════════════════
+//  LAMP BOARD SETUP
+// ══════════════════════════════════════════════════
+
+['QWERTZUIO','ASDFGHJK','PYXCVBNML'].forEach((row,ri)=>{
+  const el=document.getElementById(`lr${ri+1}`);
+  for(const l of row){ const d=document.createElement('div'); d.className='lamp'; d.dataset.l=l; d.textContent=l; el.appendChild(d); }
+});
+
+// ══════════════════════════════════════════════════
+//  JOIN FORM
+// ══════════════════════════════════════════════════
+
+function flashErr(id){ const el=document.getElementById(id); el.style.borderColor='var(--red)'; el.focus(); setTimeout(()=>el.style.borderColor='',700); }
+
+document.getElementById('join-btn').addEventListener('click',()=>{
+  const name=document.getElementById('name-input').value.trim().toUpperCase();
+  const room=document.getElementById('room-input').value.trim().toUpperCase();
+  if(!name){ flashErr('name-input'); return; }
+  if(room.length<4){ flashErr('room-input'); return; }
+  myName=name; connectWS(room);
+});
+document.getElementById('name-input').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('room-input').focus(); });
+document.getElementById('room-input').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('join-btn').click(); });
+document.getElementById('gen-btn').addEventListener('click',()=>{
+  const C='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let code='';
+  for(let i=0;i<6;i++) code+=C[Math.floor(Math.random()*C.length)];
+  document.getElementById('room-input').value=code;
+});
+
+// Server URL persistence
+const srvEl=document.getElementById('server-url-input');
+srvEl.value=localStorage.getItem('enigma_server')||'';
+srvEl.addEventListener('input',()=>{ const v=srvEl.value.trim(); v?localStorage.setItem('enigma_server',v):localStorage.removeItem('enigma_server'); });
+
+// Auto-join from URL params
+(()=>{
+  const p=new URLSearchParams(location.search);
+  const srv=p.get('server'), room=p.get('room');
+  if(srv){ srvEl.value=srv; localStorage.setItem('enigma_server',srv); }
+  if(room){ document.getElementById('room-input').value=room.toUpperCase(); document.getElementById('name-input').focus(); }
+  else { document.getElementById('name-input').focus(); }
+})();
+</script>
+</body>
+</html>
